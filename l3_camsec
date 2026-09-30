@@ -1,0 +1,731 @@
+#!/usr/bin/env bash
+
+# =====================================================================
+# L3_CamSec — Camera Permission Security Lab
+# Phase 1: CLI and project foundation.
+# Theme: Neon Green / Cybersecurity
+# =====================================================================
+
+set -o nounset
+set -o pipefail
+
+readonly APP_NAME="L3_CamSec"
+readonly APP_TAGLINE="Camera Permission Security Lab"
+readonly APP_PHASE="Phase 1 · CLI & Foundation"
+readonly APP_PROMPT="L3_CamSec"
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly CONFIG_FILE="${SCRIPT_DIR}/config/config.json"
+readonly LOG_DIR="${SCRIPT_DIR}/logs"
+readonly LOG_FILE="${LOG_DIR}/session.log"
+readonly BOX_W=58
+
+CHILD_PID=""
+
+# =====================================================================
+# Colour Palette
+# =====================================================================
+
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    if [[ "${COLORTERM:-}" == *truecolor* || "${COLORTERM:-}" == *24bit* ]]; then
+        readonly C_RESET=$'\033[0m'
+        readonly C_BOLD=$'\033[1m'
+        readonly C_GREEN=$'\033[38;2;0;255;102m'
+        readonly C_GREEN_SOFT=$'\033[38;2;130;205;150m'
+        readonly C_GREEN_DARK=$'\033[38;2;0;130;55m'
+        readonly C_AMBER=$'\033[38;2;255;184;0m'
+        readonly C_RED=$'\033[38;2;255;70;70m'
+        readonly C_CYAN=$'\033[38;2;0;255;200m'
+        readonly C_MAGENTA=$'\033[38;2;220;80;255m'
+    elif [[ "${TERM:-}" == *256color* ]]; then
+        readonly C_RESET=$'\033[0m'
+        readonly C_BOLD=$'\033[1m'
+        readonly C_GREEN=$'\033[38;5;47m'
+        readonly C_GREEN_SOFT=$'\033[38;5;114m'
+        readonly C_GREEN_DARK=$'\033[38;5;29m'
+        readonly C_AMBER=$'\033[38;5;214m'
+        readonly C_RED=$'\033[38;5;203m'
+        readonly C_CYAN=$'\033[38;5;50m'
+        readonly C_MAGENTA=$'\033[38;5;201m'
+    else
+        readonly C_RESET=$'\033[0m'
+        readonly C_BOLD=$'\033[1m'
+        readonly C_GREEN=$'\033[32m'
+        readonly C_GREEN_SOFT=$'\033[2;32m'
+        readonly C_GREEN_DARK=$'\033[2;32m'
+        readonly C_AMBER=$'\033[33m'
+        readonly C_RED=$'\033[31m'
+        readonly C_CYAN=$'\033[36m'
+        readonly C_MAGENTA=$'\033[35m'
+    fi
+else
+    readonly C_RESET=""
+    readonly C_BOLD=""
+    readonly C_GREEN=""
+    readonly C_GREEN_SOFT=""
+    readonly C_GREEN_DARK=""
+    readonly C_AMBER=""
+    readonly C_RED=""
+    readonly C_CYAN=""
+    readonly C_MAGENTA=""
+fi
+
+# =====================================================================
+# Output Helpers
+# =====================================================================
+
+info() {
+    printf '%s[ INFO ]%s %s%s%s\n' \
+        "$C_GREEN" "$C_RESET" "$C_GREEN_SOFT" "$*" "$C_RESET"
+}
+
+success() {
+    printf '%s[  OK  ]%s %s%s%s\n' \
+        "$C_GREEN" "$C_RESET" "$C_GREEN_SOFT" "$*" "$C_RESET"
+}
+
+warn() {
+    printf '%s[ WARN ]%s %s%s%s\n' \
+        "$C_AMBER" "$C_RESET" "$C_AMBER" "$*" "$C_RESET"
+}
+
+error() {
+    printf '%s[ FAIL ]%s %s%s%s\n' \
+        "$C_RED" "$C_RESET" "$C_RED" "$*" "$C_RESET" >&2
+}
+
+# =====================================================================
+# Drawing Helpers
+# =====================================================================
+
+repeat_char() {
+    local ch="$1"
+    local n="$2"
+    local filler
+
+    (( n < 0 )) && n=0
+
+    printf -v filler '%*s' "$n" ''
+    printf '%s' "${filler// /$ch}"
+}
+
+section() {
+    local title="$1"
+    local pad=$(( BOX_W - ${#title} - 4 ))
+
+    (( pad < 2 )) && pad=2
+
+    printf '\n%s▚▚%s %s%s%s %s%s%s\n' \
+        "$C_GREEN_DARK" "$C_RESET" \
+        "$C_BOLD$C_GREEN" "$title" "$C_RESET" \
+        "$C_GREEN_DARK" "$(repeat_char '─' "$pad")" "$C_RESET"
+}
+
+box_top() {
+    printf '%s╔%s╗%s\n' \
+        "$C_GREEN_DARK" "$(repeat_char '═' "$BOX_W")" "$C_RESET"
+}
+
+box_sep() {
+    printf '%s╠%s╣%s\n' \
+        "$C_GREEN_DARK" "$(repeat_char '═' "$BOX_W")" "$C_RESET"
+}
+
+box_bottom() {
+    printf '%s╚%s╝%s\n' \
+        "$C_GREEN_DARK" "$(repeat_char '═' "$BOX_W")" "$C_RESET"
+}
+
+box_row() {
+    local text="$1"
+    local colour="${2:-$C_GREEN_SOFT}"
+    local pad=$(( BOX_W - 3 - ${#text} ))
+
+    (( pad < 0 )) && pad=0
+
+    printf '%s║%s %s%s%s%*s%s║%s\n' \
+        "$C_GREEN_DARK" "$C_RESET" \
+        "$colour" "$text" "$C_RESET" \
+        "$pad" '' \
+        "$C_GREEN_DARK" "$C_RESET"
+}
+
+# =====================================================================
+# Banner
+# =====================================================================
+
+banner() {
+    printf '\n'
+
+    box_top
+
+    box_row "" "$C_RESET"
+
+    box_row "  ▓▒░   L3_CamSec   ░▒▓" "$C_BOLD$C_GREEN"
+
+    box_row "      CAMERA PERMISSION SECURITY LAB" "$C_GREEN_SOFT"
+
+    box_row "        ${APP_PHASE}" "$C_GREEN_DARK"
+
+    box_row "" "$C_RESET"
+
+    box_bottom
+
+    printf '\n'
+}
+
+boot_sequence() {
+    local -a steps=(
+        "[*] initializing security interface"
+        "[*] loading project configuration"
+        "[+] loopback interface ready"
+        "[+] audit pipeline attached"
+        "[+] L3_CamSec ready"
+    )
+
+    local step
+
+    [[ -t 1 ]] || return 0
+
+    for step in "${steps[@]}"; do
+        printf '%s%s%s\n' \
+            "$C_GREEN_DARK" "$step" "$C_RESET"
+        sleep 0.05
+    done
+
+    printf '\n'
+}
+
+# =====================================================================
+# Logging
+# =====================================================================
+
+log_event() {
+    local level="$1"
+    local message="$2"
+    local timestamp
+
+    [[ -w "$LOG_DIR" ]] || return 1
+
+    timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')" || return 1
+
+    printf '%s [%s] %s\n' \
+        "$timestamp" "$level" "$message" >> "$LOG_FILE"
+}
+
+# =====================================================================
+# Distribution Detection
+# =====================================================================
+
+detect_distribution() {
+    local id="unknown"
+    local pretty="Unknown Linux distribution"
+
+    if [[ -r /etc/os-release ]]; then
+        while IFS='=' read -r key value; do
+            case "$key" in
+                ID)
+                    id="${value%\"}"
+                    id="${id#\"}"
+                    ;;
+                PRETTY_NAME)
+                    pretty="${value%\"}"
+                    pretty="${pretty#\"}"
+                    ;;
+            esac
+        done < /etc/os-release
+    fi
+
+    printf '%s|%s\n' "$id" "$pretty"
+}
+
+# =====================================================================
+# Dependency Check
+# =====================================================================
+
+check_dependencies() {
+    local missing=0
+    local item
+    local distro_id
+    local distro_name
+
+    section "Dependency Check"
+
+    for item in bash python3; do
+        if command -v "$item" >/dev/null 2>&1; then
+            success "$item found: $(command -v "$item")"
+        else
+            error "$item is missing"
+            missing=1
+        fi
+    done
+
+    if command -v python3 >/dev/null 2>&1; then
+        if python3 -c \
+            'import json, logging, pathlib, signal, socket, subprocess, sys' \
+            >/dev/null 2>&1; then
+            success "Required Python standard-library modules are available"
+        else
+            error "Python 3 standard-library imports failed"
+            missing=1
+        fi
+    fi
+
+    IFS='|' read -r distro_id distro_name <<< "$(detect_distribution)"
+
+    printf '%sDistribution:%s %s (%s)\n' \
+        "$C_GREEN" "$C_RESET" "$distro_name" "$distro_id"
+
+    if (( missing )); then
+        printf '\n'
+
+        case "$distro_id" in
+            kali|debian|ubuntu|linuxmint|pop)
+                printf 'Install missing runtime packages with:\n'
+                printf '  sudo apt update && sudo apt install bash python3\n'
+                ;;
+            fedora)
+                printf 'Install missing runtime packages with:\n'
+                printf '  sudo dnf install bash python3\n'
+                ;;
+            arch|manjaro)
+                printf 'Install missing runtime packages with:\n'
+                printf '  sudo pacman -S bash python\n'
+                ;;
+            *)
+                printf 'Install Bash and Python 3 using your distribution package manager.\n'
+                ;;
+        esac
+
+        return 1
+    fi
+
+    success "Dependency check passed"
+
+    return 0
+}
+
+# =====================================================================
+# Configuration Reader
+# =====================================================================
+
+read_config() {
+    python3 - "$CONFIG_FILE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+
+try:
+    with config_path.open("r", encoding="utf-8") as config_file:
+        config = json.load(config_file)
+except (OSError, json.JSONDecodeError) as exc:
+    print(f"Configuration error: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+
+if not isinstance(config, dict):
+    print(
+        "Configuration error: top-level value must be a JSON object.",
+        file=sys.stderr
+    )
+    raise SystemExit(2)
+
+host = config.get("host")
+port = config.get("port")
+https = config.get("https")
+logging_enabled = config.get("logging")
+
+if host not in ("127.0.0.1", "localhost", "::1"):
+    print(
+        "Configuration error: host must be a loopback address.",
+        file=sys.stderr
+    )
+    raise SystemExit(2)
+
+if (
+    isinstance(port, bool)
+    or not isinstance(port, int)
+    or not 1 <= port <= 65535
+):
+    print(
+        "Configuration error: port must be an integer from 1 to 65535.",
+        file=sys.stderr
+    )
+    raise SystemExit(2)
+
+if not isinstance(https, bool):
+    print(
+        "Configuration error: https must be true or false.",
+        file=sys.stderr
+    )
+    raise SystemExit(2)
+
+if not isinstance(logging_enabled, bool):
+    print(
+        "Configuration error: logging must be true or false.",
+        file=sys.stderr
+    )
+    raise SystemExit(2)
+
+print(host)
+print(port)
+print(str(https).lower())
+print(str(logging_enabled).lower())
+PY
+}
+
+# =====================================================================
+# Configuration Display
+# =====================================================================
+
+show_config() {
+    local config_values
+    local host
+    local port
+    local https
+    local logging_enabled
+
+    section "Configuration"
+
+    info "Scanning ${CONFIG_FILE}"
+
+    if ! config_values="$(read_config)"; then
+        error "Could not load configuration."
+        return 1
+    fi
+
+    {
+        IFS= read -r host
+        IFS= read -r port
+        IFS= read -r https
+        IFS= read -r logging_enabled
+    } <<< "$config_values"
+
+    printf '\n'
+
+    printf '  %s%-9s%s %s\n' \
+        "$C_GREEN" "Host:" "$C_RESET" "$host"
+
+    printf '  %s%-9s%s %s\n' \
+        "$C_GREEN" "Port:" "$C_RESET" "$port"
+
+    printf '  %s%-9s%s %s\n' \
+        "$C_GREEN" "HTTPS:" "$C_RESET" "$https"
+
+    printf '  %s%-9s%s %s\n' \
+        "$C_GREEN" "Logging:" "$C_RESET" "$logging_enabled"
+
+    printf '\n'
+
+    printf '%sConfiguration editing is manual in Phase 1.%s\n' \
+        "$C_GREEN_DARK" "$C_RESET"
+}
+
+# =====================================================================
+# System Information
+# =====================================================================
+
+show_system_info() {
+    local distro_id
+    local distro_name
+
+    IFS='|' read -r distro_id distro_name <<< "$(detect_distribution)"
+
+    section "System Information"
+
+    printf '  %s%-14s%s %s (%s)\n' \
+        "$C_GREEN" "Distribution:" "$C_RESET" \
+        "$distro_name" "$distro_id"
+
+    printf '  %s%-14s%s %s\n' \
+        "$C_GREEN" "Kernel:" "$C_RESET" \
+        "$(uname -sr 2>/dev/null || printf 'unavailable')"
+
+    printf '  %s%-14s%s %s\n' \
+        "$C_GREEN" "Architecture:" "$C_RESET" \
+        "$(uname -m 2>/dev/null || printf 'unavailable')"
+
+    printf '  %s%-14s%s %s\n' \
+        "$C_GREEN" "Bash:" "$C_RESET" \
+        "${BASH_VERSION:-unknown}"
+
+    if command -v python3 >/dev/null 2>&1; then
+        printf '  %s%-14s%s %s\n' \
+            "$C_GREEN" "Python:" "$C_RESET" \
+            "$(python3 --version 2>&1)"
+    else
+        printf '  %s%-14s%s %s\n' \
+            "$C_GREEN" "Python:" "$C_RESET" \
+            "not installed"
+    fi
+}
+
+# =====================================================================
+# View Logs
+# =====================================================================
+
+view_logs() {
+    if [[ ! -f "$LOG_FILE" ]]; then
+        info "No session log exists yet."
+        return 0
+    fi
+
+    section "Recent Session Events"
+
+    tail -n 50 -- "$LOG_FILE"
+}
+
+# =====================================================================
+# Process Control
+# =====================================================================
+
+stop_child() {
+    local wait_count=0
+
+    [[ -n "$CHILD_PID" ]] || return 0
+
+    if ! kill -0 "$CHILD_PID" 2>/dev/null; then
+        wait "$CHILD_PID" 2>/dev/null || true
+        CHILD_PID=""
+        return 0
+    fi
+
+    info "Stopping lab process..."
+
+    kill -TERM "$CHILD_PID" 2>/dev/null || true
+
+    while kill -0 "$CHILD_PID" 2>/dev/null && (( wait_count < 30 )); do
+        sleep 0.1
+        ((wait_count += 1))
+    done
+
+    if kill -0 "$CHILD_PID" 2>/dev/null; then
+        warn "Process did not stop promptly; sending SIGKILL."
+        kill -KILL "$CHILD_PID" 2>/dev/null || true
+    fi
+
+    wait "$CHILD_PID" 2>/dev/null || true
+
+    CHILD_PID=""
+
+    log_event INFO "Lab stopped" || \
+        warn "Could not write to session log."
+
+    success "Lab stopped"
+}
+
+handle_interrupt() {
+    printf '\n'
+    stop_child
+    info "Exiting L3_CamSec."
+    exit 130
+}
+
+trap handle_interrupt INT
+trap 'stop_child' TERM
+
+# =====================================================================
+# Start Security Lab
+# =====================================================================
+
+start_lab() {
+    local config_values
+    local host
+    local port
+    local https
+    local logging_enabled
+
+    if ! check_dependencies; then
+        return 1
+    fi
+
+    if ! config_values="$(read_config)"; then
+        error "Fix config/config.json before starting the lab."
+        return 1
+    fi
+
+    {
+        IFS= read -r host
+        IFS= read -r port
+        IFS= read -r https
+        IFS= read -r logging_enabled
+    } <<< "$config_values"
+
+    section "Security Lab"
+
+    if [[ "$logging_enabled" == "true" ]]; then
+        if [[ ! -d "$LOG_DIR" || ! -w "$LOG_DIR" ]]; then
+            error "Log directory is missing or not writable: $LOG_DIR"
+            return 1
+        fi
+
+        log_event INFO "Lab started" || {
+            error "Could not write to the session log."
+            return 1
+        }
+    fi
+
+    if [[ ! -f "${SCRIPT_DIR}/server/server.py" ]]; then
+        success "Foundation checks passed."
+        info "The local web server will be added in Phase 2."
+        return 0
+    fi
+
+    # Prevent starting a second lab instance.
+    if [[ -n "$CHILD_PID" ]] && kill -0 "$CHILD_PID" 2>/dev/null; then
+        warn "Lab is already running with PID $CHILD_PID."
+        info "Address: http://${host}:${port}"
+        return 0
+    fi
+
+    local -a server_args
+
+    server_args=(
+        "${SCRIPT_DIR}/server/server.py"
+        --host "$host"
+        --port "$port"
+    )
+
+    [[ "$https" == "true" ]] && server_args+=(--https)
+
+    log_event INFO "Web server starting" 2>/dev/null || true
+
+    info "Starting lab on ${host}:${port}."
+
+    python3 "${server_args[@]}" &
+
+    CHILD_PID=$!
+
+    sleep 0.5
+
+    if ! kill -0 "$CHILD_PID" 2>/dev/null; then
+        wait "$CHILD_PID" 2>/dev/null || true
+        CHILD_PID=""
+        error "Lab process failed to start."
+        return 1
+    fi
+
+    success "L3_CamSec server started."
+    info "Address: http://${host}:${port}"
+    info "Web interface: ${SCRIPT_DIR}/web"
+    info "Camera images: ${SCRIPT_DIR}/logs/camera"
+    info "PID: ${CHILD_PID}"
+    info "Lab is running in the background."
+}
+
+# =====================================================================
+# Main Menu
+# =====================================================================
+
+print_menu() {
+    printf '\n'
+
+    box_top
+
+    box_row "  ▓▒░  L3_CamSec  ·  Security Control Panel" \
+        "$C_BOLD$C_GREEN"
+
+    box_sep
+
+    box_row "  [1]  Start Security Lab" \
+        "$C_GREEN_SOFT"
+
+    box_row "  [2]  Check Dependencies" \
+        "$C_GREEN_SOFT"
+
+    box_row "  [3]  Configuration" \
+        "$C_GREEN_SOFT"
+
+    box_row "  [4]  View Logs" \
+        "$C_GREEN_SOFT"
+
+    box_row "  [5]  System Information" \
+        "$C_GREEN_SOFT"
+
+    box_row "  [6]  Stop Lab" \
+        "$C_GREEN_SOFT"
+
+    box_row "  [0]  Exit" \
+        "$C_GREEN_SOFT"
+
+    box_bottom
+
+    printf '\n'
+
+    printf '%s%s%s > ' \
+        "$C_BOLD" "$C_GREEN" "$APP_PROMPT"
+    printf '%s' "$C_RESET"
+}
+
+# =====================================================================
+# Main
+# =====================================================================
+
+main() {
+    local choice
+
+    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+        warn "Running as root is unnecessary and not recommended."
+    fi
+
+    mkdir -p -- "$LOG_DIR" || {
+        error "Cannot create log directory: $LOG_DIR"
+        return 1
+    }
+
+    chmod 700 -- "$LOG_DIR" 2>/dev/null || true
+
+    touch -- "$LOG_FILE" || {
+        error "Cannot create log file: $LOG_FILE"
+        return 1
+    }
+
+    chmod 600 -- "$LOG_FILE" 2>/dev/null || true
+
+    banner
+    boot_sequence
+
+    while true; do
+        print_menu
+
+        if ! IFS= read -r choice; then
+            printf '\n'
+            break
+        fi
+
+        case "$choice" in
+            1)
+                start_lab || true
+                ;;
+            2)
+                check_dependencies || true
+                ;;
+            3)
+                show_config || true
+                ;;
+            4)
+                view_logs
+                ;;
+            5)
+                show_system_info
+                ;;
+            6)
+                if [[ -n "$CHILD_PID" ]]; then
+                    stop_child
+                else
+                    info "No lab process is running."
+                fi
+                ;;
+            0)
+                stop_child
+                info "Goodbye."
+                return 0
+                ;;
+            *)
+                warn "Invalid selection. Enter a number from 0 to 6."
+                ;;
+        esac
+    done
+}
+
+main "$@"
