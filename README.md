@@ -311,12 +311,12 @@ Contributions, ideas, improvements, and bug reports are welcome.
 
 ## 🗺️ Roadmap
 
-* [ ] Configurable capture resolution
-* [ ] Multiple capture sessions with session IDs
-* [ ] HTML session report generation
-* [ ] Unit tests
-* [ ] Browser compatibility matrix
-* [ ] Optional CLI flags (`--port`, `--host`, `--no-browser`)
+- [ ] Configurable capture resolution
+- [ ] Multiple capture sessions with session IDs
+- [ ] HTML session report generation
+- [ ] Unit tests
+- [ ] Browser compatibility matrix
+- [ ] Optional CLI flags (`--port`, `--host`, `--no-browser`)
 
 ---
 
