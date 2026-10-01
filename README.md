@@ -1,5 +1,9 @@
 <div align="center">
 
+<img src="L3_CamSec-Banner.png" alt="L3_CamSec - Camera Permission Security Lab" width="100%">
+
+<br>
+
 # L3\_CamSec
 
 **Camera Permission Security Lab**
